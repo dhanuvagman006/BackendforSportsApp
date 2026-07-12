@@ -20,7 +20,7 @@ PURPOSES: dict[str, tuple[int, tuple[str, ...], str]] = {
     "league_logo": (settings.max_logo_bytes, ("image/png", "image/jpeg"), "public"),
     "team_logo": (settings.max_logo_bytes, ("image/png", "image/jpeg"), "public"),
     "post_image": (settings.max_image_bytes, ("image/",), "public"),
-    "post_video": (settings.max_video_bytes, ("video/mp4", "video/quicktime"), "public"),
+    "post_video": (settings.max_video_bytes, ("video/mp4", "video/quicktime", "video/webm"), "public"),
     "certification_doc": (settings.max_cert_doc_bytes, ("image/", "application/pdf"), "private"),
 }
 
