@@ -2,7 +2,9 @@
 import uuid
 
 from fastapi import Depends, Header, Query, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.errors import ApiError, forbidden, unauthorized
@@ -23,7 +25,11 @@ async def get_current_user(
         payload = decode_access_token(token)
     except TokenError as e:
         raise unauthorized(e.code, "Your session has expired." if e.code == "TOKEN_EXPIRED" else "Invalid token.")
-    user = await db.get(User, uuid.UUID(payload["sub"]))
+    user = (await db.execute(
+        select(User)
+        .where(User.id == uuid.UUID(payload["sub"]))
+        .options(selectinload(User.avatar))
+    )).scalar_one_or_none()
     if user is None or user.deleted_at is not None:
         raise unauthorized("INVALID_TOKEN", "Account not found.")
     return user

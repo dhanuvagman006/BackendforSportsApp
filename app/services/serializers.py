@@ -4,6 +4,8 @@ Privacy rule (spec §3, security notes): most players are minors — `dob`,
 `school`, and `phone` never appear in any public payload; only `age_group`
 and city-level `location`.
 """
+from sqlalchemy import inspect as sa_inspect
+
 from app.db.models import CardTier, Media, Post, User
 from app.services.providers import get_storage
 from app.services.scoring import tier_slug
@@ -18,7 +20,14 @@ def media_url(media: Media | None) -> str | None:
 
 
 def avatar_url(user: User) -> str | None:
-    return media_url(user.avatar) if user.avatar_media_id else None
+    if not user.avatar_media_id:
+        return None
+    # Async SQLAlchemy cannot lazy-load mid-request (MissingGreenlet). If the
+    # relationship wasn't eagerly loaded, degrade to no avatar instead of a 500.
+    # Queries that need avatars must use .options(selectinload(User.avatar)).
+    if "avatar" in sa_inspect(user).unloaded:
+        return None
+    return media_url(user.avatar)
 
 
 def serialize_media_item(media: Media, thumbnail: str | None = None) -> dict:

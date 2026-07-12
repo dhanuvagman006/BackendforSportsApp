@@ -8,6 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Response
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.deps import get_current_user, get_optional_user
@@ -132,7 +133,9 @@ class LoginIn(BaseModel):
 
 @router.post("/login")
 async def login(body: LoginIn, db: AsyncSession = Depends(get_db)):
-    user = (await db.execute(select(User).where(User.email == body.email))).scalar_one_or_none()
+    user = (await db.execute(
+        select(User).where(User.email == body.email).options(selectinload(User.avatar))
+    )).scalar_one_or_none()
     if user is None or not verify_password(body.password, user.password_hash):
         raise unauthorized("INVALID_CREDENTIALS", "Email or password is incorrect.")
     if user.deleted_at is not None:
