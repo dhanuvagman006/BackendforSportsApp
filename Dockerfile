@@ -13,4 +13,4 @@ COPY . .
 EXPOSE 8000
 # Migrations run first, then the API. Scale-out note: move migrations to a
 # one-shot job when running multiple replicas.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "python -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]
