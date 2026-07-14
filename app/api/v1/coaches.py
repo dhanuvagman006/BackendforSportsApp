@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -193,6 +193,45 @@ async def roster(status: str = Query("active", pattern="^(active|inactive|all)$"
 
 class AddPlayerIn(BaseModel):
     player_id: str = Field(min_length=4, max_length=8)
+
+
+@router.get("/players/directory")
+async def player_directory(q: str | None = Query(None, max_length=80),
+                           db: AsyncSession = Depends(get_db),
+                           user: User = Depends(require_coach)):
+    """All registered (onboarded) students, so coaches can browse the
+    full registry before typing a name — with roster membership flags."""
+    query = (
+        select(User, UserProfile, QoScore)
+        .outerjoin(UserProfile, UserProfile.user_id == User.id)
+        .outerjoin(QoScore, QoScore.user_id == User.id)
+        .options(selectinload(User.avatar))
+        .where(User.role == "player",
+               User.deleted_at.is_(None),
+               User.player_id.is_not(None))
+        .order_by(User.full_name.asc())
+        .limit(200)
+    )
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.where(or_(User.full_name.ilike(like),
+                                User.player_id.ilike(like)))
+    rows = (await db.execute(query)).all()
+    on_roster = set(
+        (await db.execute(
+            select(CoachPlayer.user_id)
+            .where(CoachPlayer.coach_id == user.id,
+                   CoachPlayer.status == "active")
+        )).scalars().all()
+    )
+    tiers = await scoring.load_tiers(db)
+    items = []
+    for u, p, qs in rows:
+        item = _roster_item(u, p, qs, tiers, "active")
+        item["on_roster"] = u.id in on_roster
+        item.pop("status", None)
+        items.append(item)
+    return {"items": items, "total": len(items)}
 
 
 @router.post("/coaches/me/players", status_code=201)
