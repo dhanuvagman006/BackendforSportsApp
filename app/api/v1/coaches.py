@@ -268,6 +268,25 @@ async def add_player(body: AddPlayerIn, background: BackgroundTasks,
     return _roster_item(player, profile, qs, tiers, "active")
 
 
+@router.delete("/coaches/me/players/{player_user_id}")
+async def remove_player(player_user_id: uuid.UUID, background: BackgroundTasks,
+                        db: AsyncSession = Depends(get_db), user: User = Depends(require_coach)):
+    """Kick a player from the coach's squad."""
+    cp = (
+        await db.execute(select(CoachPlayer).where(CoachPlayer.coach_id == user.id,
+                                                   CoachPlayer.user_id == player_user_id))
+    ).scalar_one_or_none()
+    if cp is None:
+        raise not_found("PLAYER_NOT_ON_ROSTER", "This player is not on your roster.")
+    await db.delete(cp)
+    notif = await create_notification(db, player_user_id, "league_update",
+                                      f"Coach {user.full_name} removed you from their roster",
+                                      title="Roster Update")
+    await db.commit()
+    background.add_task(deliver_notification, notif.id)
+    return {"removed": True, "player_user_id": str(player_user_id)}
+
+
 # --------------------------------------------------------------------------- recommendations
 class RecommendIn(BaseModel):
     player_ids: list[uuid.UUID] = Field(min_length=1, max_length=20)
